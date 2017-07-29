@@ -32,7 +32,7 @@ from scripts.auth import token
 
 <h3> Request a CSR</h3>
 <p>
-Choose which aliases to include:<br><ul>
+Choose which aliases to include:</p><br><ul>
     <input type="checkbox" name="hostname" value="${hostname}" checked disabled="true"> ${hostname}</input><br>
 <form method="post">
     %if not hostname.endswith('mit.edu'):
@@ -42,9 +42,9 @@ Choose which aliases to include:<br><ul>
  %endif
 </ul>
   <button class="btn"><span class="fa fa-send"></span> Generate CSR</button>
+  <button class="btn" onclick='this.form.action="/request_le/${locker}/${hostname}";'><span class="fa fa-lock"></span> Do it through Let&apos;s Encrypt</button>
   <input type="hidden" name="token" value="${token()}" />
 </form>
-</p>
 
 %endif
 

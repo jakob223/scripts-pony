@@ -180,7 +180,7 @@ class RootController(BaseController):
                        account_key = '/afs/athena.mit.edu/contrib/scripts/REPLACEME/account.key'
                        acme_dir = '/afs/athena.mit/edu/contrib/scripts/REPLACEME' # to be eliminated or decided upon
                        # call acme_tiny.py with the CSR
-                       cert = acme_tiny.get_crt(account_key, csr_file.name(), acme_dir, log=acme_tiny.LOGGER, CA=acme_tiny.DEFAULT_CA):
+                       cert = acme_tiny.get_crt(account_key, csr_file.name(), acme_dir, log=acme_tiny.LOGGER, CA=acme_tiny.DEFAULT_CA)
                        csr_file.close() 
 
                        # TODO: download the intermediate cert
