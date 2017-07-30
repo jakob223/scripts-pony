@@ -15,11 +15,10 @@ from sqlalchemy.orm.exc import NoResultFound
 from decorator import decorator
 import subprocess
 import cgi
-import tempfile
 from urllib2 import urlopen
 
 from scripts import auth
-from .. import mail,vhosts,acme_tiny
+from .. import mail,vhosts,acme_tiny,letsencrypt
 from ..model import queue
 
 __all__ = ['RootController']
@@ -32,6 +31,8 @@ def scripts_team_only(func,*args,**kw):
         redirect('/')
     else:
         return func(*args,**kw)
+
+    
 
 class RootController(BaseController):
     """
@@ -157,57 +158,24 @@ class RootController(BaseController):
                    redirect('/index/'+locker)
                else:
                    if hostname.endswith('.mit.edu') and not auth.on_scripts_team():
-                       flash("You can't request a CSR for an MIT.edu host - please contact the scripts team for help.")
+                       flash("You can't do Let's Encrypt yet for an MIT.edu host - please contact the scripts team for help.")
                        redirect('/index/'+locker)
-                   
-                   csr_req_cmd = ['/bin/sudo', '/etc/pki/tls/gencsr-pony',locker,hostname]
-                   for arg,value in kwargs:
-                       if arg[:5] == 'alias':
-                           if value in aliases:
-                               csr_req_cmd.append(value)
-                   csr_req = subprocess.Popen(csr_req_cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-                   out, err = csr_req.communicate()
-                   if csr_req.returncode:
-                       flash("CSR request failed.")
-                       redirect("/index/"+locker)
-                   else:
-                       csr_contents = out
-                       csr_file = tempfile.NamedTemporaryFile()
-                       # write csr_contents to csr_file
-                       csr_file.write(csr_contents)
-
-                       # TODO: make an account key
-                       account_key = '/afs/athena.mit.edu/contrib/scripts/REPLACEME/account.key'
-                       acme_dir = '/afs/athena.mit/edu/contrib/scripts/REPLACEME' # to be eliminated or decided upon
-                       # call acme_tiny.py with the CSR
-                       cert = acme_tiny.get_crt(account_key, csr_file.name(), acme_dir, log=acme_tiny.LOGGER, CA=acme_tiny.DEFAULT_CA)
-                       csr_file.close() 
-
-                       # TODO: download the intermediate cert
-                       intermediate_cert_location = "https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem"
-                       intermediate_cert = urlopen(intermediate_cert_location).read()
-                       certs = cert + "\n" + intermediate_cert
-                       # parse the certificate (vhostcert import )
-                       # TODO: pull this code out into somewhere so it isn't repeated twice
-                       importcert = subprocess.Popen(['/afs/athena.mit.edu/contrib/scripts/sbin/vhostcert', 'import'],stdout=subprocess.PIPE,stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-                       certstring, err = importcert.communicate(input=certs.strip())
-                       if importcert.returncode:
-                           flash("Error installing cert, is it malformed: "+err)
-                           redirect('/index/'+locker)
-                       # make sure it is the right cert
-                       # TODO: move this somewhere scripts-ey. Source is in this repo.
-                       check_certs_cmd = ['/afs/athena.mit.edu/user/j/a/jakobw/arch/common/bin/verify-certs','-hostname='+hostname]
-                       check_certs = subprocess.Popen(check_certs_cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE,stdin=subprocess.PIPE)
-                       out, err = check_certs.communicate(input=certs)
-                       if check_certs.returncode:
-                          flash("Certificate chain invalid: "+err)
-                          redirect('/index/' + locker)
                        
-                       # put it into LDAP
-                       vhosts.set_cert(locker, hostname, importcert)
+                   else:
+                       aliases_to_request = []
+                       for arg,value in kwargs:
+                           if arg[:5] == 'alias':
+                               if value in aliases:
+                                   aliases_to_request.append(value)
+                       
+                       try:
+                           letsencrypt.request_and_install(locker, hostname, aliases_to_request)
+                       except vhosts.UserError,e:
+                           flash(e.message)
+                           redirect('/index/'+locker)
+                       
                        flash("Added certificate for %s - it will become active within an hour." % hostname)
                        redirect('/index/' + locker)
-
                        # TODO: separate all this into a function that can also be called by the cronjob
         else:
             flash("This endpoint requires POST parameters")
@@ -227,23 +195,12 @@ class RootController(BaseController):
                 flash("Invalid token!")
             else:
                 if certificate is not None: # form is for certificate
-                    # parse the certificate (vhostcert import )
-                    importcert = subprocess.Popen(['/afs/athena.mit.edu/contrib/scripts/sbin/vhostcert', 'import'],stdout=subprocess.PIPE,stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-                    certstring, err = importcert.communicate(input=certificate.strip())
-                    if importcert.returncode:
-                        flash("Error installing cert, is it malformed: "+err)
+                    try: 
+                        vhosts.set_cert(locker, hostname, certificate)
+                    except vhosts.UserError,e:
+                        flash(e.message)
                         redirect('/index/'+locker)
-                    # make sure it is the right cert
-                    # TODO: move this somewhere scripts-ey. Source is in this repo.
-                    check_certs_cmd = ['/afs/athena.mit.edu/user/j/a/jakobw/arch/common/bin/verify-certs','-hostname='+hostname]
-                    check_certs = subprocess.Popen(check_certs_cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE,stdin=subprocess.PIPE)
-                    out, err = check_certs.communicate(input=certificate)
-                    if check_certs.returncode:
-                       flash("Certificate chain invalid: "+err)
-                       redirect('/index/' + locker)
                     
-                    # put it into LDAP
-                    vhosts.set_cert(locker, hostname, importcert)
                     flash("Added certificate for %s - it will become active within an hour." % hostname)
                 else: # form is for CSR generation
                     try:

@@ -101,10 +101,26 @@ def set_path(locker,vhost,path):
 @sensitive
 @log.exceptions
 @reconnecting
-def set_cert(locker, vhost, cert):
-    """Puts the certificate provided into LDAP for the provided host.
+def set_cert(locker, vhost, certs):
+    """Puts the certificates provided into LDAP for the provided host.
+       First verifies that the certificate is valid for the given host.
        @cert should already be serialized in the format LDAP wants."""
 
+    # import certificate to scripts format
+    importcert = subprocess.Popen(['/afs/athena.mit.edu/contrib/scripts/sbin/vhostcert', 'import'],stdout=subprocess.PIPE,stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+    certstring, err = importcert.communicate(input=certs.strip())
+    if importcert.returncode:
+        raise UserError("Error installing cert, is it malformed: "+err)
+        
+    # make sure it is the right cert
+    # TODO: move this somewhere scripts-ey. Source is in this repo.
+    check_certs_cmd = ['/afs/athena.mit.edu/user/j/a/jakobw/arch/common/bin/verify-certs','-hostname='+vhost]
+    check_certs = subprocess.Popen(check_certs_cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE,stdin=subprocess.PIPE)
+    out, err = check_certs.communicate(input=certs)
+    if check_certs.returncode:
+       raise UserError("Certificate chain invalid: "+err)
+    
+    # put it into LDAP
     locker = locker.encode('utf-8')
     cert = cert.encode('utf-8')
     scriptsVhostName = get_vhost_name(locker,vhost)
