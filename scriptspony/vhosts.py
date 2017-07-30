@@ -52,6 +52,34 @@ def list_vhosts(locker):
             for i,m in res]
 
 
+@log.exceptions
+@reconnecting
+def list_all_vhosts_with_certs(prod=False):
+    """Return a list of (locker,vhost,aliases,cert) for all hosts with certs
+    """
+    if prod:
+        extra_filter = ""
+    else:
+        # add a filter so we get fewer results to stay under the administrative limit while testing.
+        extra_filter = "(scriptsVhostAccount=uid=achernya,ou=People,dc=scripts,dc=mit,dc=edu)"
+    res=conn.search_s('ou=VirtualHosts,dc=scripts,dc=mit,dc=edu',
+                      ldap.SCOPE_ONELEVEL,
+                       ldap.filter.filter_format('(&(objectClass=scriptsVhost)(scriptsVhostCertificateKeyFile=%s){extra_filter})'.format(extra_filter=extra_filter),["scripts-2048.key"]),['scriptsVhostAccount','scriptsVhostName','scriptsVhostAlias','scriptsVhostCertificate'])
+                       
+    def get_locker_from_account(acct):
+        """ takes an account string like "uid=mafia,ou=People,dc=scripts,dc=mit,dc=edu"
+            and returns the locker name (i.e. "mafia")
+        """
+        # maybe there's an actual LDAP way to do this... if so this is a shitty hack
+        parts = acct.split(',')
+        return parts[0].split('=')[-1]
+    return [(get_locker_from_account(m['scriptsVhostAccount'][0]),m['scriptsVhostName'][0],m.get('scriptsVhostAlias',[]),m['scriptsVhostCertificate'][0])
+            for i,m in res]
+
+
+
+
+
 @team_sensitive
 @log.exceptions
 def get_path(locker,hostname):

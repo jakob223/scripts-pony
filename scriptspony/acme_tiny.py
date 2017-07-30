@@ -5,8 +5,10 @@ try:
 except ImportError:
     from urllib2 import urlopen # Python 2
 
-DEFAULT_CA = "https://acme-staging.api.letsencrypt.org"
-#DEFAULT_CA = "https://acme-v01.api.letsencrypt.org"
+STAGING_CA = "https://acme-staging.api.letsencrypt.org"
+PRODUCTION_CA = "https://acme-v01.api.letsencrypt.org"
+DEFAULT_CA = STAGING_CA
+
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.StreamHandler())

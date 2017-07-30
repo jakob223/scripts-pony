@@ -181,7 +181,7 @@ class RootController(BaseController):
             flash("This endpoint requires POST parameters")
             redirect('/index/'+locker)
 
-
+            
     @expose('scriptspony.templates.request_cert')
     def request_cert(self,locker,hostname,token=None,certificate=None, **kwargs):
         if pylons.request.response_ext:
